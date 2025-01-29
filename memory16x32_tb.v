@@ -4,17 +4,15 @@ module memory16x32_tb #(
     parameter MEMO_DEPTH = (1 << ADDR_WIDTH)
 );
 
-parameter clk_period = 10;
+localparam clk_period = 10;
 
 reg [DATA_WIDTH-1:0] Data_in_tb;
 reg [ADDR_WIDTH-1:0] Address_tb;
 reg EN_tb, CLK_tb, RST_tb;
-reg [DATA_WIDTH-1:0] memory [0:MEMO_DEPTH-1];
-
 wire [DATA_WIDTH-1:0] Data_out_tb;
 wire Valid_out_tb;
 
-integer error_count, correct_count, i;
+integer error_count, correct_count, i, test_ID;
 
 
 
@@ -29,6 +27,27 @@ initial begin
 
     //todo
 
+    //Address Exhaustive Testing
+    repeat(10) begin    
+        for (i = 0; i < ADDR_WIDTH; i = i + 1) begin
+            @(posedge CLK_tb)
+            EN_tb = 1'b1;
+            Address_tb = i;
+            checkvalid(Data_in_tb,Address_tb,EN_tb,RST_tb,Data_out_tb,Valid_out_tb);  
+            test_ID = test_ID + 1;
+
+            @(posedge CLK_tb)
+            EN_tb = 1'b0;
+            checkvalid(Data_in_tb,Address_tb,EN_tb,RST_tb,Data_out_tb,Valid_out_tb);
+            Data_in_tb = Data_in_tb + 1;  
+            test_ID = test_ID + 1;
+        end
+    end
+
+    $display("Error Count = %0d", error_count);
+    $display("Correct Count = %0d", correct_count);
+
+    $stop;
 end
 
 ////////////////////////////////////////////////////////////
@@ -43,6 +62,7 @@ task initialize;
         RST_tb = 'b0;
         correct_count = 0;
         error_count = 0;
+        test_ID = 0;
     end
 endtask
 
@@ -62,7 +82,7 @@ task checkreset;
     begin
         reset();
         if(Data_out || Valid_out != 0) begin
-            $display("Error in Reset Function");
+            $display("Error in Reset function");
             error_count = error_count + 1;
         end else begin
             correct_count = correct_count + 1;
@@ -73,25 +93,45 @@ endtask
 task checkvalid;
     input [DATA_WIDTH-1:0] Data_in;
     input [ADDR_WIDTH-1:0]Address;
-    input EN;
-    input [DATA_WIDTH-1:0] Data_out;
-    input Valid_out;
+    input EN,RST;
+    input reg [DATA_WIDTH-1:0] Data_out;
+    input reg Valid_out;
+
+    reg [DATA_WIDTH-1:0] Data_out_g;
+    reg Valid_out_g;
 
     begin
-        //todo
+        @(negedge CLK_tb)
+        goldenmodel(Data_in, Address, EN, RST, Data_out_g, Valid_out_g);
+        if(Data_out_g != Data_out) begin
+            $display("###########################");
+            $display("Error in Data test case: %0d", test_ID);
+            $display("Golden: %0b , Actual: %0b", Data_out_g, Data_out);
+            error_count = error_count + 1;
+        end else begin
+            correct_count = correct_count + 1;
+        end
+
+        if(Valid_out_g != Valid_out) begin
+            $display("###########################");
+            $display("Error in Valid test case: %0d", test_ID);
+            $display("Golden: %0d , Actual: %0d", Valid_out_g, Valid_out);
+            error_count = error_count + 1;
+        end else begin
+            correct_count = correct_count + 1;
+        end
+
     end
 endtask
 
 task goldenmodel;
     input [DATA_WIDTH-1:0] Data_in_g;
     input [ADDR_WIDTH-1:0] Address_g;
-    input EN_g;
-    input RST_g;
-    output [DATA_WIDTH-1:0] Data_out_g;
+    input EN_g, RST_g;
+    output reg [DATA_WIDTH-1:0] Data_out_g;
     output Valid_out_g;
 
-    input reg [DATA_WIDTH-1:0] memory_current_g [0:MEMO_DEPTH-1];
-    output reg [DATA_WIDTH-1:0] memory_out_g [0:MEMO_DEPTH-1];
+    reg [DATA_WIDTH-1:0] memory_out_g [0:MEMO_DEPTH-1]; 
 
     begin
         if(RST_g) begin
@@ -101,17 +141,12 @@ task goldenmodel;
                 memory_out_g[i] = 'b0;
             end
         end else begin
-            for (i = 0; i < MEMO_DEPTH; i = i + 1) begin
-                memory_out_g[i] = memory_current_g[i];
-            end
             @(posedge CLK_tb)
             //Write Operation
             if(EN_g) begin
                 memory_out_g[Address_g] = Data_in_g;
                 Valid_out_g = 'b0;
-            end 
-            //Read Operation
-            else begin
+            end else begin
                 Data_out_g = memory_out_g[Address_g];
                 Valid_out_g = 'b1;
             end
@@ -141,5 +176,6 @@ memory16x32 DUT(
 .Data_out(Data_out_tb),
 .Valid_out(Valid_out_tb)
 );
+
 
 endmodule
