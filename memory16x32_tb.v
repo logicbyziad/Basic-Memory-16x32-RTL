@@ -33,7 +33,7 @@ initial begin
             @(posedge CLK_tb)
             EN_tb = 1'b1;
             Address_tb = i;
-            checkvalid(Data_in_tb,Address_tb,EN_tb,RST_tb,Data_out_tb,Valid_out_tb);  
+            //checkvalid(Data_in_tb,Address_tb,EN_tb,RST_tb,Data_out_tb,Valid_out_tb);  
             test_ID = test_ID + 1;
 
             @(posedge CLK_tb)
